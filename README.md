@@ -1,6 +1,8 @@
 # Auto Clicker
 
-A lightweight Windows auto clicker with a simple GUI. Supports mouse buttons and keyboard keys, configurable intervals, repeat limits, and fixed click positions.
+**Version 1.0.1**
+
+A lightweight Windows auto clicker with a simple GUI. Supports mouse buttons and keyboard keys, configurable intervals, repeat limits, and fixed click positions. The entire app runs on a single thread using tkinter's event loop — no background worker threads.
 
 ---
 
@@ -41,9 +43,12 @@ The output `.exe` will be in `src/dist/`.
 
 ## Settings
 
-### Mouse position display
+### Status bar
 
-A live **X / Y** coordinate readout appears in the top-right corner of the window. It updates every 50 ms and shows the current screen-absolute cursor position. This is useful for finding the exact coordinates to use with Fixed Position.
+A status bar runs along the top of the window:
+
+- **Clicks (top-left)** — a live counter of how many clicks/keypresses have been performed in the current run. Resets to 0 each time you start.
+- **X / Y (top-right)** — a live readout of the current screen-absolute cursor position, updated every 50 ms. Useful for finding the exact coordinates to use with Fixed Position.
 
 ---
 
@@ -57,7 +62,12 @@ How long to wait between each click/keypress.
 | **Seconds** | Additional seconds (0–59) |
 | **Milliseconds** | Additional milliseconds (0–999) |
 
-**Human randomization** — when checked, adds a random offset of up to ±1 second to each interval. This makes the timing irregular so it looks less like a bot.
+**Human randomization** — when checked, makes the auto clicker behave less mechanically in two ways:
+
+- The wait between clicks gets a random offset of up to ±1 second.
+- Each mouse click's target lands within ±1 pixel of the intended X/Y position.
+
+This applies to both cursor-following and fixed-position clicks. (Position jitter only affects mouse clicks, since keyboard presses have no coordinates.)
 
 ---
 
@@ -89,18 +99,18 @@ Use the live coordinate display in the top-right corner to find the coordinates 
 
 ### Repeat Limit
 
-By default the auto clicker runs indefinitely until stopped. Check **Limit repeats** to enable one of three stop conditions:
+By default the auto clicker runs indefinitely until stopped. Check **Limit repeats** to enable one of these stop conditions:
 
 | Mode | Description |
 |------|-------------|
 | **Number of clicks** | Stop after the specified number of clicks/keypresses |
-| **Stop at date/time** | Stop when the system clock reaches the specified date and time (`YYYY-MM-DD HH:MM:SS`) |
 | **Run for** | Stop after a set duration (hours, minutes, seconds) |
 
 ---
 
 ## Starting and stopping
 
-- **Start** — begins the auto clicker with the current settings. The Start button disables while running.
-- **Stop** — halts the auto clicker immediately.
-- **Esc** — pressing Escape on the keyboard also stops the auto clicker at any time.
+- **Start (F6)** — begins the auto clicker with the current settings. The Start button disables while running. You can also press **F6** on the keyboard.
+- **Stop (F7)** — halts the auto clicker immediately. You can also press **F7** on the keyboard.
+
+The F6/F7 hotkeys work globally, so you can start and stop the clicker without the window focused.

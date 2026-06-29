@@ -1,66 +1,126 @@
-import threading
 import time
 import pyautogui
 import random
+import datetime
 
 
 class ClickController:
-    shouldStop = False
+    shouldStop = True
     numberOfClicks = 0
 
-    def start(settings: dict):
+    _root = None
+    _settings = None
+    _processStartTime = None
+    _afterId = None
+
+    @staticmethod
+    def start(root, settings: dict):
         ClickController.shouldStop = False
         ClickController.numberOfClicks = 0
-        startTime = time.time()
-        threading.Thread(target=ClickController._runClicks, args=[settings], daemon=True).start()
-        print("Dispatched threads in", time.time() - startTime, "seconds")
+        ClickController._root = root
+        ClickController._settings = settings
+        ClickController._processStartTime = time.time()
+        ClickController._scheduleNext()
 
+    @staticmethod
     def stop():
         ClickController.shouldStop = True
+        if ClickController._afterId is not None:
+            try:
+                ClickController._root.after_cancel(ClickController._afterId)
+            except Exception:
+                pass
+            ClickController._afterId = None
 
-    def _runClicks(settings):
-        processStartTime = time.time()
-        while not ClickController.shouldStop:
-            startedWaitingAt = time.time()
-            humanRandomizationFactor = 0
-            if settings["humanRandomize"]:
-                humanRandomizationFactor = (random.random() * 2) - 1
+    @staticmethod
+    def _scheduleNext():
+        if ClickController.shouldStop:
+            return
+        waitMs = int(ClickController._settings["waitTime"] * 1000)
+        if ClickController._settings["humanRandomize"]:
+            waitMs += int((random.random() * 2 - 1) * 1000)
+        waitMs = max(0, waitMs)
+        ClickController._afterId = ClickController._root.after(waitMs, ClickController._doClick)
 
-            while time.time() - startedWaitingAt < settings["waitTime"] + humanRandomizationFactor and not ClickController.shouldStop:
-                continue
-            
-            if ClickController.shouldStop: return
+    @staticmethod
+    def _doClick():
+        if ClickController.shouldStop:
+            return
 
-            if settings["key"] == "Left Click" or settings["key"] == "Right Click" or settings["key"] == "Middle Click":
-                position = pyautogui.position()
+        s = ClickController._settings
 
-                if settings["fixedPos"]:
-                    position = pyautogui.Point(settings["locationX"], settings["locationY"])
+        if s["key"] in ("Left Click", "Right Click", "Middle Click"):
+            position = pyautogui.position()
+            if s["fixedPos"]:
+                position = pyautogui.Point(s["locationX"], s["locationY"])
+            if s["humanRandomize"]:
+                position = pyautogui.Point(position.x + random.randint(-1, 1), position.y + random.randint(-1, 1))
+            btn = ClickController._getMouseButtonMap(s["key"])
 
-                if settings["clickType"] == "Single Click":
-                    pyautogui.click(button=ClickController._getMouseButtonMap(settings["key"]), x=position.x, y=position.y)
-                elif settings["clickType"] == "Double Click":
-                    pyautogui.doubleClick(button=ClickController._getMouseButtonMap(settings["key"]), x=position.x, y=position.y)
-                elif settings["clickType"] == "Tripple Click":
-                    pyautogui.tripleClick(button=ClickController._getMouseButtonMap(settings["key"]), x=position.x, y=position.y)
-
+            if s["hold"]:
+                pyautogui.mouseDown(button=btn, x=position.x, y=position.y)
+                ClickController._afterId = ClickController._root.after(
+                    s["holdMs"],
+                    lambda: ClickController._finishMouseHold(btn, position)
+                )
+                return
             else:
-                pyautogui.press(settings["key"])
-            
-            ClickController.numberOfClicks += 1
+                if s["clickType"] == "Single Click":
+                    pyautogui.click(button=btn, x=position.x, y=position.y)
+                elif s["clickType"] == "Double Click":
+                    pyautogui.doubleClick(button=btn, x=position.x, y=position.y)
+                elif s["clickType"] == "Tripple Click":
+                    pyautogui.tripleClick(button=btn, x=position.x, y=position.y)
+        else:
+            if s["hold"]:
+                pyautogui.keyDown(s["key"])
+                ClickController._afterId = ClickController._root.after(
+                    s["holdMs"],
+                    lambda: ClickController._finishKeyHold(s["key"])
+                )
+                return
+            else:
+                pyautogui.press(s["key"])
 
-            if settings["limitRepeats"]:
-                if settings["repeatMode"] == "clicks":
-                    if ClickController.numberOfClicks > settings["repeatClicks"]: ClickController.stop()
-                elif settings["repeatMode"] == "duration":
-                    if time.time() - processStartTime > settings["durationLimit"]: ClickController.stop()
-                
-    
+        ClickController._incrementAndSchedule()
 
+    @staticmethod
+    def _finishMouseHold(btn, position):
+        pyautogui.mouseUp(button=btn, x=position.x, y=position.y)
+        ClickController._incrementAndSchedule()
+
+    @staticmethod
+    def _finishKeyHold(key):
+        pyautogui.keyUp(key)
+        ClickController._incrementAndSchedule()
+
+    @staticmethod
+    def _incrementAndSchedule():
+        ClickController.numberOfClicks += 1
+        s = ClickController._settings
+
+        if s["limitRepeats"]:
+            if s["repeatMode"] == "clicks":
+                if ClickController.numberOfClicks >= s["repeatClicks"]:
+                    ClickController.stop()
+                    return
+            elif s["repeatMode"] == "duration":
+                if time.time() - ClickController._processStartTime >= s["durationLimit"]:
+                    ClickController.stop()
+                    return
+            elif s["repeatMode"] == "datetime":
+                stopDt = datetime.datetime(
+                    s["stopYear"], s["stopMonth"], s["stopDay"],
+                    s["stopHour"], s["stopMinute"], s["stopSecond"]
+                )
+                if datetime.datetime.now() >= stopDt:
+                    ClickController.stop()
+                    return
+
+        ClickController._scheduleNext()
+
+    @staticmethod
     def _getMouseButtonMap(value):
-        if value == "Left Click":
-            return "left"
-        if value == "Right Click":
-            return "right"
-        if value == "Middle Click":
-            return "middle"
+        if value == "Left Click": return "left"
+        if value == "Right Click": return "right"
+        if value == "Middle Click": return "middle"
